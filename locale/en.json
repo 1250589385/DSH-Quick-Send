@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quick Send",
+    "description": "Shortcut buttons under the message composer that send preset text to the current conversation. Each button's caption, size, opacity, shape, and message text are editable in place."
+  }
+}

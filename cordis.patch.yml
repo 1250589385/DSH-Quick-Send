@@ -1,0 +1,6 @@
+# dsh-quick-send bundle patch.
+#
+# One Host row; the Client half renders the shortcut bar and sends prompts.
+- insert:
+    - id: quick-send
+      name: dsh-quick-send

@@ -1,0 +1,25 @@
+# Editor and OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and caches
+*.log
+pnpm-debug.log*
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build output (this plugin ships plain JS, but keep a guard)
+lib/
+dist/
+build/
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+coverage/
+.nyc_output/
