@@ -1,25 +1,27 @@
 /**
  * Client half of dsh-quick-send.
  *
- * Layout, chosen so the composer never grows and nothing overflows:
+ * Layout
+ * ------
+ * Everything lives in the `conversation.composer.dock` seat — the ambient row
+ * under the composer card. That row is a flex container whose only other child
+ * is the host's context meter (context progress), which renders *after* the
+ * slot. Giving this group `order: 1` therefore places it to the RIGHT of the
+ * context meter; `order: 0` puts it to the left. Nothing floats over the
+ * transcript, so the plugin cannot cover the conversation.
  *
- *  - `conversation.input.overlay` — a 26px trigger button pinned to the
- *    top-right corner of the composer card (this seat anchors at `inset:0 0 auto`
- *    inside the card). It also carries the transient status line.
- *  - `shell.overlay` — the compact editor panel, rendered in the frame-wide
- *    floating layer that sits above every column and outside their scroll
- *    containers, so it is never clipped by the transcript scroller. It is
- *    positioned from the trigger's own measured rect, opening below the trigger
- *    or above it when the viewport bottom is close.
- *  - `conversation.composer.dock` — the ambient row of one-click send buttons
- *    under the card.
+ * The group is [shortcut chips…] [gear]. The gear opens the editor, which is
+ * rendered in the frame-wide `shell.overlay` layer so it can never be clipped by
+ * the transcript scroller or push the page taller.
  *
- * Sending uses the same Client API the composer itself uses:
+ * Moving
+ * ------
+ * Right-clicking the group enters move mode. The group becomes draggable; drag
+ * left or right and release to snap it to the left or right of the context
+ * meter. The choice persists in `localStorage`. Escape cancels.
+ *
+ * Sending uses the same Client API as the official composer:
  * `ctx.sessions.binding(sessionId).session.prompt(content, 'queue')`.
- *
- * Shortcuts are Client-owned state persisted to `localStorage`, so the feature
- * works with no Host bridge. Each shortcut carries its caption, message text,
- * size (font px), opacity, and module shape. Styling uses host theme tokens.
  *
  * Registration is a lazy factory with no side effects; styles, dictionaries,
  * and slot injections are registered inside `apply` so the framework disposes
@@ -38,13 +40,14 @@ window.__ModuleLoader__.load({
 
     const NS = 'dsh.quickSend';
     const STORAGE_KEY = 'dsh-quick-send.shortcuts.v1';
+    const PLACEMENT_KEY = 'dsh-quick-send.placement.v1';
 
     /* ---------------------------------------------------------------- locale */
 
     const en = {
       trigger: 'Quick send shortcuts',
       close: 'Close',
-      empty: 'No shortcuts yet. Add one to send preset text with a click.',
+      empty: 'No shortcuts yet — click \u2699 to add one.',
       add: 'Add',
       reset: 'Defaults',
       labelField: 'Name',
@@ -67,12 +70,15 @@ window.__ModuleLoader__.load({
       emptyText: 'this shortcut has no text yet',
       sessionGone: 'this conversation is not open',
       editorTitle: 'Quick send',
-      editorIntro: 'Buttons sit under the composer; click one to send it.',
+      editorIntro: 'Click a button to send it. Right-click the group to move it.',
+      moveHint: 'Drag left or right, then release \u2014 Esc cancels',
+      placedLeft: 'Moved to the left of the context meter',
+      placedRight: 'Moved to the right of the context meter',
     };
     const zh = {
       trigger: '快捷发送指令',
       close: '关闭',
-      empty: '还没有快捷指令。添加一个即可一键发送。',
+      empty: '还没有快捷指令 \u2014 点 \u2699 添加',
       add: '添加',
       reset: '默认',
       labelField: '名称',
@@ -95,7 +101,10 @@ window.__ModuleLoader__.load({
       emptyText: '此快捷指令还没有填写文字',
       sessionGone: '当前对话尚未打开',
       editorTitle: '快捷发送',
-      editorIntro: '按钮位于输入框下方，点击即可直接发送。',
+      editorIntro: '点击按钮即可直接发送；右键按钮组可拖动换位置。',
+      moveHint: '左右拖动后松开 \u2014 按 Esc 取消',
+      placedLeft: '已移到上下文进度左侧',
+      placedRight: '已移到上下文进度右侧',
     };
 
     /* ----------------------------------------------------------------- state */
@@ -203,16 +212,58 @@ window.__ModuleLoader__.load({
       return useSyncExternalStore(store.subscribe, store.getSnapshot);
     }
 
+    /* ------------------------------------------------------- placement store */
+
+    /**
+     * Which side of the host's context meter the group sits on. `order: 0`
+     * keeps it left of that sibling; `order: 1` moves it right.
+     */
+    const placementStore = (function createPlacement() {
+      let value = 'right';
+      try {
+        if (window.localStorage.getItem(PLACEMENT_KEY) === 'left') value = 'left';
+      } catch (error) {
+        /* storage blocked: keep the default */
+      }
+      const listeners = new Set();
+      return {
+        getSnapshot() {
+          return value;
+        },
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+        set(next) {
+          const normalized = next === 'left' ? 'left' : 'right';
+          if (normalized === value) return;
+          value = normalized;
+          try {
+            window.localStorage.setItem(PLACEMENT_KEY, normalized);
+          } catch (error) {
+            /* keep the in-memory value */
+          }
+          for (const listener of Array.from(listeners)) listener();
+        },
+      };
+    })();
+
+    function usePlacement() {
+      return useSyncExternalStore(placementStore.subscribe, placementStore.getSnapshot);
+    }
+
     /* ----------------------------------------------- editor-open UI state */
 
     /**
      * Which Session the editor targets and which element it should hang from.
-     * The trigger lives in the composer overlay while the panel renders in the
-     * frame-wide `shell.overlay`, so this small store carries the link between
-     * them. It holds a DOM node by design and is never persisted.
+     * The gear lives in the composer dock while the panel renders in the
+     * frame-wide `shell.overlay`, so this small store links them. It holds a DOM
+     * node by design and is never persisted.
      */
     const ui = (function createUi() {
-      let current = { open: false, sessionId: undefined, anchor: null, tick: 0 };
+      let current = { open: false, sessionId: undefined, anchor: null };
       const listeners = new Set();
       function emit() {
         for (const listener of Array.from(listeners)) listener();
@@ -229,13 +280,13 @@ window.__ModuleLoader__.load({
         },
         toggle(sessionId, anchor) {
           current = current.open && current.sessionId === sessionId
-            ? { open: false, sessionId: undefined, anchor: null, tick: current.tick + 1 }
-            : { open: true, sessionId, anchor, tick: current.tick + 1 };
+            ? { open: false, sessionId: undefined, anchor: null }
+            : { open: true, sessionId, anchor };
           emit();
         },
         close() {
           if (!current.open) return;
-          current = { open: false, sessionId: undefined, anchor: null, tick: current.tick + 1 };
+          current = { open: false, sessionId: undefined, anchor: null };
           emit();
         },
       };
@@ -297,14 +348,29 @@ window.__ModuleLoader__.load({
     /* ------------------------------------------------------------------ styles */
 
     const css = [
-      /* ---- trigger in the composer card's top-right corner ---- */
-      '.qs-corner{position:absolute;top:6px;right:10px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;pointer-events:none;z-index:4}',
-      '.qs-corner>*{pointer-events:auto}',
-      '.qs-trigger{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);cursor:pointer;font-family:inherit;font-size:12px;line-height:1}',
-      '.qs-trigger:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}',
-      '.qs-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
-      '.qs-trigger[aria-expanded="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}',
-      '.qs-toast{max-width:240px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-overlay);box-shadow:var(--dsw-elevation-soft,0 4px 18px rgba(0,0,0,.18));padding:3px 7px;font-size:11px;line-height:16px;text-align:right}',
+      /* ---- the group: chips + gear, inline in the composer dock row ---- */
+      '.qs-group{display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%;position:relative;border-radius:var(--dsw-radius-md);padding:1px 2px;transition:box-shadow .12s,background .12s}',
+      /* The dock is a centered flex row whose other child is the host context
+       * meter. `order` chooses the side; `margin-left:auto` pushes the group to
+       * the far right of the row when it sits right of the meter, so the two
+       * are adjacent instead of floating in the middle. */
+      '.qs-group[data-place="left"]{order:0}',
+      '.qs-group[data-place="right"]{order:1;margin-left:auto}',
+      '.qs-group[data-moving="true"]{cursor:grab;box-shadow:0 0 0 1px var(--dsw-alias-brand-primary);background:var(--dsw-alias-interactive-bg-hover);touch-action:none;user-select:none}',
+      '.qs-group[data-dragging="true"]{cursor:grabbing;opacity:.85}',
+      '.qs-chip{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer;padding:3px 9px;line-height:18px;font-family:inherit;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;transition:background .12s,border-color .12s}',
+      '.qs-chip:hover{background:var(--dsw-alias-bg-layer-1);border-color:var(--dsw-alias-border-l1)}',
+      '.qs-chip:disabled{opacity:.45;cursor:default}',
+      '.qs-chip:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
+      '.qs-group[data-moving="true"] .qs-chip{cursor:grab;pointer-events:none}',
+      '.qs-gear{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:none;width:24px;height:24px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);cursor:pointer;font-family:inherit;font-size:12px;line-height:1;transition:background .12s,color .12s}',
+      '.qs-gear:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}',
+      '.qs-gear:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
+      '.qs-gear[aria-expanded="true"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}',
+      '.qs-group[data-moving="true"] .qs-gear{pointer-events:none;opacity:.5}',
+      '.qs-empty{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
+      '.qs-hint{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;line-height:16px;padding:3px 8px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:var(--dsw-elevation-soft,0 4px 18px rgba(0,0,0,.18));color:var(--dsw-alias-label-secondary);pointer-events:none;z-index:2}',
+      '.qs-toast{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);max-width:260px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-overlay);box-shadow:var(--dsw-elevation-soft,0 4px 18px rgba(0,0,0,.18));padding:3px 8px;font-size:11px;line-height:16px;text-align:center;white-space:nowrap;pointer-events:none;z-index:3}',
       '.qs-toast-ok{color:var(--dsw-alias-label-secondary)}',
       '.qs-toast-err{color:var(--dsw-alias-state-error-primary)}',
       /* ---- floating editor panel, rendered in shell.overlay ---- */
@@ -325,58 +391,32 @@ window.__ModuleLoader__.load({
       '.qs-textarea{min-height:42px;max-height:110px;resize:vertical}',
       '.qs-select{cursor:pointer}',
       '.qs-input:focus,.qs-textarea:focus,.qs-select:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}',
-      '.qs-empty{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);margin:0}',
-      /* ---- one-click buttons under the card ---- */
-      '.qs-dock{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%}',
-      '.qs-chip{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer;padding:4px 10px;line-height:18px;font-family:inherit;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;transition:background .12s,border-color .12s}',
-      '.qs-chip:hover{background:var(--dsw-alias-bg-layer-1);border-color:var(--dsw-alias-border-l1)}',
-      '.qs-chip:disabled{opacity:.45;cursor:default}',
-      '.qs-chip:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}',
-      '.qs-dock-empty{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}',
+      '.qs-empty-panel{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);margin:0}',
     ].join('\n');
 
-    /* ------------------------------------------------------ dock: send buttons */
+    /* ---------------------------------------------- dock: chips + gear group */
 
-    function QuickSendDock(props) {
+    function QuickSendGroup(props) {
       const { sessions, sessionId, t } = props;
       const shortcuts = useShortcuts();
-      const [busy, setBusy] = useState(false);
-
-      const onSend = useCallback((shortcut) => {
-        if (busy || String(shortcut.text).trim() === '') return;
-        setBusy(true);
-        sendText(sessions, sessionId, shortcut.text).then(() => setBusy(false));
-      }, [busy, sessions, sessionId]);
-
-      if (shortcuts.length === 0) {
-        return h('div', { className: 'qs-dock' },
-          h('span', { className: 'qs-dock-empty' }, t('empty')));
-      }
-      return h('div', { className: 'qs-dock', role: 'group', 'aria-label': t('trigger') },
-        shortcuts.map((shortcut) => h('button', {
-          key: shortcut.id,
-          type: 'button',
-          className: 'qs-chip',
-          disabled: busy,
-          title: shortcut.text,
-          'aria-label': shortcut.label,
-          style: chipStyle(shortcut),
-          onClick: () => { onSend(shortcut); },
-        }, shortcut.label)));
-    }
-
-    /* ------------------------------------------- trigger in the composer card */
-
-    function QuickSendTrigger(props) {
-      const { sessions, sessionId, t } = props;
+      const placement = usePlacement();
       const state = useUi();
+
       const [busy, setBusy] = useState(false);
+      const [moving, setMoving] = useState(false);
+      const [dragging, setDragging] = useState(false);
+      const [dragDx, setDragDx] = useState(0);
       const [notice, setNotice] = useState(null);
-      const buttonRef = useRef(null);
+
+      const groupRef = useRef(null);
+      const gearRef = useRef(null);
+      const dragRef = useRef({ active: false, startX: 0, dx: 0, pointerId: null });
       const noticeTimer = useRef(null);
 
-      /* Close the panel when this seat goes away or the Session changes, so a
-       * stale panel never targets the previous conversation. */
+      const open = state.open && state.sessionId === sessionId;
+
+      /* Leaving this seat (Session switch or unmount) closes the panel, so a
+       * stale editor never targets the previous conversation. */
       useEffect(() => {
         ui.close();
         return () => ui.close();
@@ -392,11 +432,10 @@ window.__ModuleLoader__.load({
         noticeTimer.current = window.setTimeout(() => {
           noticeTimer.current = null;
           setNotice(null);
-        }, 3200);
+        }, 2600);
       }, []);
 
-      /* Owned by the panel host; it reports outcomes back through ui callbacks
-       * that this component installs, so the status appears next to the trigger. */
+      /* The panel host reports outcomes back through this bridge slot. */
       useEffect(() => {
         panelBridge.report = flash;
         return () => {
@@ -404,31 +443,148 @@ window.__ModuleLoader__.load({
         };
       }, [flash]);
 
-      const open = state.open && state.sessionId === sessionId;
+      const onSend = useCallback((shortcut) => {
+        if (busy || moving) return;
+        if (String(shortcut.text).trim() === '') {
+          flash({ kind: 'err', text: t('sendFailed', { message: t('emptyText') }) });
+          return;
+        }
+        setBusy(true);
+        sendText(sessions, sessionId, shortcut.text).then((outcome) => {
+          setBusy(false);
+          if (outcome.ok) flash({ kind: 'ok', text: t('sent', { label: shortcut.label }) });
+          else {
+            flash({
+              kind: 'err',
+              text: t('sendFailed', {
+                message: outcome.message === 'session-unavailable' ? t('sessionGone') : outcome.message,
+              }),
+            });
+          }
+        });
+      }, [busy, flash, moving, sessions, sessionId, t]);
 
-      return h(React.Fragment, null,
+      /* Right-click toggles move mode; the browser menu is suppressed. */
+      const onContextMenu = useCallback((event) => {
+        event.preventDefault();
+        setMoving((value) => !value);
+        setDragDx(0);
+      }, []);
+
+      const onPointerDown = useCallback((event) => {
+        if (!moving || event.button !== 0) return;
+        event.preventDefault();
+        const element = groupRef.current;
+        if (element === null) return;
+        try {
+          element.setPointerCapture(event.pointerId);
+        } catch (error) {
+          /* capture unsupported: window listeners still deliver moves */
+        }
+        dragRef.current = { active: true, startX: event.clientX, dx: 0, pointerId: event.pointerId };
+        setDragging(true);
+        setDragDx(0);
+      }, [moving]);
+
+      const onPointerMove = useCallback((event) => {
+        const drag = dragRef.current;
+        if (!drag.active) return;
+        const dx = event.clientX - drag.startX;
+        drag.dx = dx;
+        setDragDx(dx);
+      }, []);
+
+      const finishDrag = useCallback((pointerId) => {
+        const drag = dragRef.current;
+        if (!drag.active) return;
+        drag.active = false;
+        const element = groupRef.current;
+        if (element !== null && pointerId !== null) {
+          try {
+            if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
+          } catch (error) {
+            /* capture already released */
+          }
+        }
+        const dx = drag.dx;
+        dragRef.current = { active: false, startX: 0, dx: 0, pointerId: null };
+        setDragging(false);
+        setDragDx(0);
+        setMoving(false);
+        if (Math.abs(dx) < 20) return;
+        const next = dx < 0 ? 'left' : 'right';
+        placementStore.set(next);
+        flash({ kind: 'ok', text: next === 'left' ? t('placedLeft') : t('placedRight') });
+      }, [flash, t]);
+
+      const onPointerUp = useCallback((event) => {
+        finishDrag(event.pointerId);
+      }, [finishDrag]);
+
+      /* Escape leaves move mode without moving. */
+      useEffect(() => {
+        if (!moving) return undefined;
+        const onKey = (event) => {
+          if (event.key === 'Escape') {
+            dragRef.current = { active: false, startX: 0, dx: 0, pointerId: null };
+            setDragging(false);
+            setDragDx(0);
+            setMoving(false);
+          }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+      }, [moving]);
+
+      const chips = shortcuts.map((shortcut) => h('button', {
+        key: shortcut.id,
+        type: 'button',
+        className: 'qs-chip',
+        disabled: busy,
+        title: shortcut.text,
+        'aria-label': shortcut.label,
+        style: chipStyle(shortcut),
+        onClick: () => { onSend(shortcut); },
+      }, shortcut.label));
+
+      const dragStyle = dragDx === 0 ? undefined : { transform: 'translateX(' + dragDx + 'px)' };
+
+      return h('div', {
+        ref: groupRef,
+        className: 'qs-group',
+        'data-place': placement,
+        'data-moving': moving ? 'true' : 'false',
+        'data-dragging': dragging ? 'true' : 'false',
+        style: dragStyle,
+        role: 'group',
+        'aria-label': t('trigger'),
+        onContextMenu,
+        onPointerDown,
+        onPointerMove,
+        onPointerUp,
+        onPointerCancel: onPointerUp,
+      },
         h('style', { 'data-quick-send': 'styles' }, css),
-        h('div', { className: 'qs-corner' },
-          h('button', {
-            ref: buttonRef,
-            type: 'button',
-            className: 'qs-trigger',
-            title: t('trigger'),
-            'aria-label': t('trigger'),
-            'aria-haspopup': 'dialog',
-            'aria-expanded': open,
-            disabled: busy,
-            onClick: () => ui.toggle(sessionId, buttonRef.current),
-          }, open ? '\u2715' : '\u2699'),
-          notice === null ? null : h('div', {
-            className: 'qs-toast ' + (notice.kind === 'ok' ? 'qs-toast-ok' : 'qs-toast-err'),
-            role: 'status',
-          }, notice.text),
-        ),
+        shortcuts.length === 0 ? h('span', { className: 'qs-empty' }, t('empty')) : chips,
+        h('button', {
+          ref: gearRef,
+          type: 'button',
+          className: 'qs-gear',
+          title: t('trigger'),
+          'aria-label': t('trigger'),
+          'aria-haspopup': 'dialog',
+          'aria-expanded': open,
+          onClick: () => ui.toggle(sessionId, gearRef.current),
+        }, open ? '\u2715' : '\u2699'),
+        moving ? h('div', { className: 'qs-hint' }, t('moveHint')) : null,
+        notice === null ? null : h('div', {
+          className: 'qs-toast ' + (notice.kind === 'ok' ? 'qs-toast-ok' : 'qs-toast-err'),
+          role: 'status',
+        }, notice.text),
       );
     }
 
-    /** Channel from the shell-overlay panel back to the trigger's status line. */
+    /** Channel from the shell-overlay panel back to the group's status line. */
     const panelBridge = { report: null };
 
     /* --------------------------------------- panel host in the frame overlay */
@@ -439,8 +595,8 @@ window.__ModuleLoader__.load({
       const panelRef = useRef(null);
       const [box, setBox] = useState(null);
 
-      /* Follow the trigger's own rect while open: a rAF loop only compares and
-       * sets state on an actual change, so an idle panel costs nothing. */
+      /* Follow the gear's own rect while open: a rAF loop only sets state on an
+       * actual change, so an idle panel costs nothing. */
       useEffect(() => {
         if (!state.open || state.anchor === null) {
           setBox(null);
@@ -486,10 +642,11 @@ window.__ModuleLoader__.load({
 
       if (!state.open || box === null || state.sessionId === undefined) return null;
 
-      /* Place below the trigger, or above it when the viewport bottom is near. */
+      /* The dock sits low on screen, so prefer opening upward. */
       const viewportH = window.innerHeight;
       const estimated = 380;
-      const style = box.top + estimated > viewportH - 8
+      const noRoomBelow = box.top + estimated > viewportH - 8;
+      const style = noRoomBelow
         ? { bottom: Math.max(8, viewportH - box.bottom), right: Math.max(8, window.innerWidth - box.right) }
         : { top: Math.max(8, box.top), right: Math.max(8, window.innerWidth - box.right) };
 
@@ -574,7 +731,7 @@ window.__ModuleLoader__.load({
           ),
         ),
         h('p', { className: 'qs-panel-intro' }, t('editorIntro')),
-        shortcuts.length === 0 ? h('p', { className: 'qs-empty' }, t('empty')) : null,
+        shortcuts.length === 0 ? h('p', { className: 'qs-empty-panel' }, t('empty')) : null,
         shortcuts.map((shortcut, index) => h(ShortcutCard, {
           key: shortcut.id,
           shortcut,
@@ -668,7 +825,7 @@ window.__ModuleLoader__.load({
     function DockSeat(props) {
       const sessionId = props.sessionId;
       if (sessionId === undefined) return null;
-      return h(QuickSendDock, { sessions: props.sessions, sessionId, t: props.t });
+      return h(QuickSendGroup, { sessions: props.sessions, sessionId, t: props.t });
     }
 
     /* ------------------------------------------------------------------- apply */
@@ -678,14 +835,6 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'quick-send: dictionaries');
         const sessions = ctx.sessions;
-
-        ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
-          name: 'conversation.input.overlay',
-          id: 'quick-send-trigger',
-          order: 20,
-          locale: NS,
-          inject: () => ({ sessions }),
-        }, QuickSendTrigger));
 
         ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
           name: 'conversation.composer.dock',

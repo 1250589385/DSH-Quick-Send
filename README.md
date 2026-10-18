@@ -21,12 +21,22 @@
 
 ## 特性
 
-### 两种入口，都不打扰输入
+### 一个按钮组，不遮挡任何内容
 
-| 入口 | 位置 | 说明 |
+| 组成 | 位置 | 说明 |
 |---|---|---|
-| ⚙ **触发器** | 输入框卡片**右上角** | 24px 小按钮，绝对定位、**零占位**，不挤压输入区域；点开是配置面板 |
-| 🔘 **快捷按钮行** | 输入框卡片**下方** | 每个按钮一条指令，点一下即发送 |
+| 🔘 **快捷按钮** | 输入框**下方**那一行，默认在上下文进度**右侧** | 每个按钮一条指令，点一下即发送 |
+| ⚙ **齿轮** | 紧挨快捷按钮，同一组内 | 点开是配置面板 |
+
+整组走**正常流式布局**（不是浮层），所以**不会盖住对话正文**。
+
+### 右键拖动换位置
+
+**右键**按钮组即可进入移动模式（出现提示条 + 高亮边框）：
+
+- 按住左右拖动，松开后**吸附到上下文进度的左侧或右侧**；
+- 按 `Esc` 取消，不改变位置；
+- 选择会记住（`localStorage` 键 `dsh-quick-send.placement.v1`），刷新后保持。
 
 ### 每条快捷指令都能单独定制
 
@@ -47,7 +57,7 @@
 
 - 不会被对话滚动区**裁剪**；
 - **不会把页面撑高溢出**（之前的版本在输入框下方展开大表单就会溢出）；
-- 靠近视口底部时**自动翻到触发器上方**；
+- 输入框在屏幕下方，**默认向上展开**，空间不足时自动调整；
 - 浮层本身点击穿透，只有面板自己接收指针事件。
 
 ### 不干扰你的草稿
@@ -134,17 +144,22 @@ dsh plugin --profile <你的profile> add /绝对路径/DSH-Quick-Send
 - **Host 半边**（`index.js`）：仅 `export function apply() {}`，不注册任何 Host 能力，
   只让 bundle 解析出一个 Loader 行。
 - **Client 半边**（`client.js`）：纯 JS，通过 `window.__ModuleLoader__.load({...})`
-  注册一个惰性工厂，内部用三个 slot 注入：
+  注册一个惰性工厂，内部用两个 slot 注入：
 
 | Slot | 注册 id | 作用 |
 |---|---|---|
-| `conversation.input.overlay` | `quick-send-trigger` | 输入框卡片内的右上角触发器 + 状态行 |
-| `conversation.composer.dock` | `quick-send-dock` | 输入框下方的快捷按钮行 |
+| `conversation.composer.dock` | `quick-send-dock` | 快捷按钮 + 齿轮组成的整组，含移动模式与状态行 |
 | `shell.overlay` | `quick-send-panel` | 框架级浮层中的配置面板 |
+
+**为什么能排在上下文进度右侧**：宿主把 dock 渲染为
+`[renderSlot("conversation.composer.dock")][ContextMeter]` 的居中 flex 行，
+所以槽内容天然在 ContextMeter 左侧。本插件给按钮组加 `order: 1` 移到右侧，
+再用 `margin-left: auto` 贴住行尾，使其与上下文进度相邻而不是漂在中间；
+移动模式把 `order` 在 `0` / `1` 之间切换。
 
 配置状态放在一个模块级 store（`useSyncExternalStore` 订阅），
 由 `dock` 与 `panel` 共享，因此任一处修改在另一处立即生效。
-面板位置通过触发器的 `getBoundingClientRect()` 用 `requestAnimationFrame`
+面板位置通过齿轮的 `getBoundingClientRect()` 用 `requestAnimationFrame`
 跟随（只在坐标真正变化时才 setState，空闲时零开销）。
 
 **资源释放**：样式以 React `<style>` 元素渲染在组件树内，卸载即移除；
@@ -159,7 +174,7 @@ DSH-Quick-Send/
 ├── package.json          # 包清单：exports、files、dsh.bundle / dsh.client
 ├── cordis.patch.yml      # 插入 quick-send Host 行
 ├── index.js              # Host 半边（空 apply）
-├── client.js             # 客户端半边：按钮、触发器、浮层编辑器、发送
+├── client.js             # 客户端半边：按钮组、齿轮、浮层编辑器、发送、拖动换位
 ├── locale/
 │   ├── en.json           # 插件列表标题与描述（英文）
 │   └── zh.json           # 插件列表标题与描述（中文）

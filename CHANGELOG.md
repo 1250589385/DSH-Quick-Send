@@ -5,6 +5,30 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-10-18
+
+### 变更（不兼容 1.0.0 的摆放方式）
+
+- **齿轮不再遮挡对话**：1.0.0 把齿轮放在 `conversation.input.overlay`
+  （卡片内绝对定位浮层），会压在正文上。现在整个控件搬进
+  `conversation.composer.dock`，走正常流式布局，不再覆盖任何内容。
+- **齿轮与快捷按钮合并为一组**：结构变为 `[快捷按钮…][⚙]`，不再是两处分离的控件。
+- **默认排在上下文进度右侧**：宿主 dock 的渲染顺序是
+  `[slot 内容][ContextMeter]`，槽内容天然在左侧；本版用 `order: 1` 把按钮组
+  调到右侧，并以 `margin-left: auto` 贴住行尾，使其紧邻上下文进度。
+
+### 新增
+
+- **右键拖动换位置**：右键按钮组进入移动模式（显示提示条＋高亮边框），
+  按住左右拖动、松开后吸附到上下文进度的左侧或右侧；按 `Esc` 取消。
+  选择持久化在 `localStorage`（键 `dsh-quick-send.placement.v1`），刷新后保持。
+- 编辑器内新增说明文字，提示可用右键移动按钮组。
+
+### 移除
+
+- 移除 `conversation.input.overlay` 座位注册（`quick-send-trigger`）。
+  升级后该座位只剩宿主自带条目。
+
 ## [1.0.0] - 2026-10-18
 
 首个公开版本。
