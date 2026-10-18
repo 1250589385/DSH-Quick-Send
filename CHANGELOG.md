@@ -5,6 +5,13 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.1] - 2026-10-18
+
+### 修复
+
+- **恢复上下文进度与累计使用区域**：按钮组不再使用 `margin-left: auto` 占满 dock 剩余空间，改为不收缩的有限宽度 flex 项，避免挤压或覆盖 ContextMeter / usage 的显示与点击区域。
+- 按钮组仍排在上下文进度右侧，但不再抢占整行空间。
+
 ## [1.1.0] - 2026-10-18
 
 ### 变更（不兼容 1.0.0 的摆放方式）

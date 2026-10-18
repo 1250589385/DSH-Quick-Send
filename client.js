@@ -349,13 +349,13 @@ window.__ModuleLoader__.load({
 
     const css = [
       /* ---- the group: chips + gear, inline in the composer dock row ---- */
-      '.qs-group{display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%;position:relative;border-radius:var(--dsw-radius-md);padding:1px 2px;transition:box-shadow .12s,background .12s}',
+      '.qs-group{display:inline-flex;flex:0 0 auto;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:min(100%,420px);position:relative;border-radius:var(--dsw-radius-md);padding:1px 2px;transition:box-shadow .12s,background .12s;pointer-events:auto}',
       /* The dock is a centered flex row whose other child is the host context
-       * meter. `order` chooses the side; `margin-left:auto` pushes the group to
-       * the far right of the row when it sits right of the meter, so the two
-       * are adjacent instead of floating in the middle. */
+       * meter. `order` chooses the side. Keep this group flex-shrink:0 and do
+       * not use an auto margin: an auto margin can consume the meter's row and
+       * make the host's cumulative-usage/context controls hard to click. */
       '.qs-group[data-place="left"]{order:0}',
-      '.qs-group[data-place="right"]{order:1;margin-left:auto}',
+      '.qs-group[data-place="right"]{order:1;margin-left:0}',
       '.qs-group[data-moving="true"]{cursor:grab;box-shadow:0 0 0 1px var(--dsw-alias-brand-primary);background:var(--dsw-alias-interactive-bg-hover);touch-action:none;user-select:none}',
       '.qs-group[data-dragging="true"]{cursor:grabbing;opacity:.85}',
       '.qs-chip{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer;padding:3px 9px;line-height:18px;font-family:inherit;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;transition:background .12s,border-color .12s}',
