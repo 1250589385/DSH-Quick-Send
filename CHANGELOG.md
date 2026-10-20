@@ -5,6 +5,15 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.2] - 2026-10-21
+
+### 变更
+
+- **优化 npm 标签，让插件更容易被搜到**。补上了社区通用入口标签
+  `plugin` / `deepseek` / `harness`（此前只有 `dsh-plugin` / `deepseek-harness`，
+  只搜 `plugin` 或 `deepseek` 的人找不到本插件）。
+- 新增 `ui` `productivity` `input`，去掉无人检索的 `quick-reply`。
+
 ## [1.1.1] - 2026-10-18
 
 ### 修复
