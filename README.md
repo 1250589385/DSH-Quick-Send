@@ -83,13 +83,15 @@ ctx.sessions.binding(sessionId).session.prompt([{ type: 'text', text }], 'queue'
 
 ## 安装
 
+> **命令里的 `<你的profile>` 换成你自己的 profile 名。** 不确定就查一下：
+> - 命令行：`dsh plugin --profile` 会提示必填；环境变量 `$env:DSH_PROFILE` 直接给出当前值
+> - 桌面端常见的是 `desktop`，Web 端常见的是 `web`
+
 ### 方式一：从 npm 安装（推荐）
 
 ```bash
 dsh plugin --profile <你的profile> add dsh-quick-send
 ```
-
-> 把 `<你的profile>` 换成你的 profile 名，例如 `web` 或 `desktop`。
 
 装完**重启 DSH**（或重载 Web 页面）即可看到按钮。
 
@@ -104,11 +106,26 @@ dsh plugin --profile <你的profile> add github:1250589385/DSH-Quick-Send
 
 ### 方式三：本地目录安装（开发用）
 
-把本仓库放到任意工作目录，然后：
+把本仓库放到任意本地目录，然后填**这个目录的真实路径**：
 
 ```bash
-dsh plugin --profile <你的profile> add /绝对路径/DSH-Quick-Send
+# Windows（注意用你自己的实际路径，反斜杠或正斜杠都可以）
+dsh plugin --profile desktop add D:\你的路径\DSH-Quick-Send
+
+# macOS / Linux
+dsh plugin --profile web add /home/you/DSH-Quick-Send
 ```
+
+### 方式四：在 DSH 网页界面的安装框里装
+
+网页版 DSH 的「添加插件」对话框**只要包名**，不要整条命令：
+
+| 输入框里填 | 结果 |
+| --- | --- |
+| `dsh-quick-send` | ✅ 正确 |
+| `dsh plugin --profile desktop add dsh-quick-send` | ❌ 报 `not a package name the registry accepts` |
+
+意思是：**只把命令最后面那一段（包名）填进去**。Git 地址和本地绝对路径也可以直接填在同一个框里。
 
 ---
 
