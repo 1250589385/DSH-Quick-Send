@@ -1,18 +1,23 @@
 {
   "name": "dsh-quick-send",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "DSH 快捷发送插件：在输入框下方、上下文进度旁提供可自定义的快捷指令按钮，一键把预设文字直接发送到当前对话，省去重复打字；每条指令的名称、字号、透明度、模块化形状与发送内容均可就地编辑，右键按钮组可拖动换位置。修复上下文进度与累计使用区域被挤压后无法点击的问题。",
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
+    "deepseek",
+    "plugin",
+    "harness",
     "cordis",
-    "quick-send",
-    "quick-reply",
-    "shortcut",
+    "web-ui",
+    "ui",
     "composer",
+    "shortcut",
+    "quick-send",
+    "productivity",
     "prompt",
-    "web-ui"
+    "input"
   ],
   "type": "module",
   "main": "index.js",
