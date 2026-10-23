@@ -40,12 +40,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/1250589385/DSH-Quick-Send.git"
+    "url": "git+https://github.com/1250589385/dsh-quick-send.git"
   },
   "bugs": {
-    "url": "https://github.com/1250589385/DSH-Quick-Send/issues"
+    "url": "https://github.com/1250589385/dsh-quick-send/issues"
   },
-  "homepage": "https://github.com/1250589385/DSH-Quick-Send#readme",
+  "homepage": "https://github.com/1250589385/dsh-quick-send#readme",
   "license": "MIT",
   "dsh": {
     "bundle": {
