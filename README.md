@@ -98,7 +98,7 @@ dsh plugin --profile <你的profile> add dsh-quick-send
 ### 方式二：从 GitHub 仓库安装
 
 ```bash
-dsh plugin --profile <你的profile> add github:1250589385/DSH-Quick-Send
+dsh plugin --profile <你的profile> add github:1250589385/dsh-quick-send
 ```
 
 ⚠️ 两种方式是**同一个包名**，请勿混用；已经用 `github:` 装过想换 npm 名的，先执行
@@ -214,6 +214,6 @@ DSH-Quick-Send/
 
 ## 致谢与反馈
 
-欢迎提 issue / PR：<https://github.com/1250589385/DSH-Quick-Send/issues>
+欢迎提 issue / PR：<https://github.com/1250589385/dsh-quick-send/issues>
 
 反馈问题时请注明 **插件版本、DSH 版本、系统与复现步骤**，并**勿粘贴密钥或未脱敏日志**。
